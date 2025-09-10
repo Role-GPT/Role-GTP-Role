@@ -32,9 +32,9 @@
           "@radix-ui/react-toggle-group": "^1.1.2",
           "@radix-ui/react-tooltip": "^1.1.8",
           "@radix-ui/react-visually-hidden": "*",
-          "@replit/vite-plugin-cartographer": "*",
-          "@replit/vite-plugin-runtime-error-modal": "*",
-          "@shared/schema": "*",
+          
+          
+          
           "@supabase/supabase-js": "*",
           "@tanstack/react-query": "*",
           "@vitejs/plugin-react": "*",
@@ -52,13 +52,13 @@
           "fs": "*",
           "http": "*",
           "input-otp": "^1.4.2",
-          "jsr:": "^supabase",
+          
           "lucide-react": "^0.487.0",
           "marked": "*",
           "motion": "*",
           "nanoid": "*",
           "next": "*",
-          "npm:hono": "*",
+          
           "path": "*",
           "react": "^18.3.1",
           "react-day-picker": "^8.10.1",
