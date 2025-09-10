@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { ChatSidebar } from './components/ChatSidebar';
+import { ChatMessage } from './components/ChatMessage';
+import { devLog } from './utils/devUtils';
 import './index.css';
 
-// 기본 타입 정의
 interface Message {
   id: number;
   text: string;
@@ -24,7 +26,7 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([
     { 
       id: 1, 
-      text: "안녕하세요! Role GPT입니다.", 
+      text: "안녕하세요! Role GPT입니다. 이제 컴포넌트 구조로 개선되었습니다.", 
       sender: "bot", 
       role: "일반 어시스턴트",
       timestamp: new Date()
@@ -49,6 +51,8 @@ function App() {
 
   const sendMessage = async () => {
     if (message.trim()) {
+      devLog('메시지 전송:', message);
+      
       const newMessage: Message = { 
         id: Date.now(), 
         text: message, 
@@ -61,7 +65,6 @@ function App() {
       setMessage('');
       setIsLoading(true);
       
-      // 모의 AI 응답
       setTimeout(() => {
         const responses = [
           `[${currentRole}로서] 네, ${message}에 대해 자세히 설명드리겠습니다.`,
@@ -80,8 +83,21 @@ function App() {
         
         setMessages(prev => [...prev, botResponse]);
         setIsLoading(false);
+        
+        devLog('AI 응답 생성 완료');
       }, 1500);
     }
+  };
+
+  const handleNewChat = () => {
+    devLog('새 대화 시작');
+    setMessages([{ 
+      id: Date.now(), 
+      text: "새로운 대화를 시작합니다!", 
+      sender: "bot", 
+      role: currentRole,
+      timestamp: new Date()
+    }]);
   };
 
   return (
@@ -91,115 +107,16 @@ function App() {
       fontFamily: 'system-ui, -apple-system, sans-serif',
       backgroundColor: '#f8f9fa'
     }}>
-      {/* 향상된 사이드바 */}
-      <div style={{
-        width: '320px',
-        backgroundColor: '#2c3e50',
-        color: 'white',
-        padding: '20px',
-        display: 'flex',
-        flexDirection: 'column',
-        overflowY: 'auto'
-      }}>
-        <h2 style={{ margin: '0 0 30px 0', fontSize: '28px', fontWeight: '600' }}>
-          Role GPT
-        </h2>
-        
-        {/* 프로젝트 선택 */}
-        <div style={{ marginBottom: '25px' }}>
-          <h3 style={{ fontSize: '14px', marginBottom: '12px', opacity: 0.8, textTransform: 'uppercase' }}>
-            프로젝트
-          </h3>
-          <select 
-            value={currentProject?.id || ''}
-            onChange={(e) => {
-              const project = projects.find(p => p.id === e.target.value);
-              setCurrentProject(project || null);
-            }}
-            style={{
-              width: '100%',
-              padding: '10px',
-              borderRadius: '6px',
-              border: 'none',
-              backgroundColor: '#34495e',
-              color: 'white',
-              fontSize: '14px'
-            }}
-          >
-            <option value="">프로젝트 선택</option>
-            {projects.map(project => (
-              <option key={project.id} value={project.id}>{project.name}</option>
-            ))}
-          </select>
-          {currentProject && (
-            <p style={{ fontSize: '12px', opacity: 0.7, margin: '8px 0 0 0' }}>
-              {currentProject.description}
-            </p>
-          )}
-        </div>
-
-        {/* 역할 선택 */}
-        <div style={{ marginBottom: '25px' }}>
-          <h3 style={{ fontSize: '14px', marginBottom: '12px', opacity: 0.8, textTransform: 'uppercase' }}>
-            AI 역할
-          </h3>
-          <select 
-            value={currentRole}
-            onChange={(e) => setCurrentRole(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '10px',
-              borderRadius: '6px',
-              border: 'none',
-              backgroundColor: '#34495e',
-              color: 'white',
-              fontSize: '14px'
-            }}
-          >
-            {roles.map(role => (
-              <option key={role} value={role}>{role}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* 통계 */}
-        <div style={{ marginBottom: '25px' }}>
-          <h3 style={{ fontSize: '14px', marginBottom: '12px', opacity: 0.8, textTransform: 'uppercase' }}>
-            대화 통계
-          </h3>
-          <div style={{ fontSize: '13px', opacity: 0.7, lineHeight: '1.5' }}>
-            <div>총 메시지: {messages.length}개</div>
-            <div>현재 세션: {Math.floor(messages.length / 2)}턴</div>
-            <div>활성 역할: {currentRole}</div>
-          </div>
-        </div>
-
-        {/* 새 대화 버튼 */}
-        <button
-          onClick={() => {
-            setMessages([{ 
-              id: Date.now(), 
-              text: "새로운 대화를 시작합니다!", 
-              sender: "bot", 
-              role: currentRole,
-              timestamp: new Date()
-            }]);
-          }}
-          style={{
-            padding: '12px',
-            backgroundColor: '#e74c3c',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: '500',
-            marginTop: 'auto'
-          }}
-        >
-          새 대화 시작
-        </button>
-      </div>
+      <ChatSidebar
+        currentRole={currentRole}
+        setCurrentRole={setCurrentRole}
+        currentProject={currentProject}
+        setCurrentProject={setCurrentProject}
+        projects={projects}
+        roles={roles}
+        messageCount={messages.length}
+        onNewChat={handleNewChat}
+      />
 
       {/* 메인 채팅 영역 */}
       <div style={{
@@ -208,7 +125,7 @@ function App() {
         flexDirection: 'column',
         backgroundColor: 'white'
       }}>
-        {/* 향상된 헤더 */}
+        {/* 헤더 */}
         <div style={{
           padding: '20px',
           borderBottom: '1px solid #e0e0e0',
@@ -238,43 +155,7 @@ function App() {
           backgroundColor: '#f8f9fa'
         }}>
           {messages.map(msg => (
-            <div key={msg.id} style={{
-              marginBottom: '20px',
-              display: 'flex',
-              justifyContent: msg.sender === 'user' ? 'flex-end' : 'flex-start'
-            }}>
-              <div style={{
-                maxWidth: '75%',
-                padding: '14px 18px',
-                borderRadius: '20px',
-                backgroundColor: msg.sender === 'user' ? '#007bff' : 'white',
-                color: msg.sender === 'user' ? 'white' : '#333',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                position: 'relative'
-              }}>
-                {msg.sender === 'bot' && (
-                  <div style={{ 
-                    fontSize: '11px', 
-                    opacity: 0.7, 
-                    marginBottom: '6px',
-                    fontWeight: '500'
-                  }}>
-                    {msg.role} • {msg.timestamp.toLocaleTimeString()}
-                  </div>
-                )}
-                <div style={{ lineHeight: '1.4' }}>{msg.text}</div>
-                {msg.sender === 'user' && (
-                  <div style={{ 
-                    fontSize: '10px', 
-                    opacity: 0.8, 
-                    marginTop: '4px',
-                    textAlign: 'right'
-                  }}>
-                    {msg.timestamp.toLocaleTimeString()}
-                  </div>
-                )}
-              </div>
-            </div>
+            <ChatMessage key={msg.id} message={msg} />
           ))}
           
           {isLoading && (
@@ -299,7 +180,7 @@ function App() {
           )}
         </div>
 
-        {/* 향상된 입력 영역 */}
+        {/* 입력 영역 */}
         <div style={{
           padding: '20px',
           borderTop: '1px solid #e0e0e0',
@@ -324,7 +205,6 @@ function App() {
                 borderRadius: '25px',
                 outline: 'none',
                 fontSize: '14px',
-                resize: 'none',
                 backgroundColor: isLoading ? '#f8f9fa' : 'white'
               }}
             />
