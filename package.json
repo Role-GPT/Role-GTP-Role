@@ -1,5 +1,5 @@
 {
-  "name": "simple-react-app",
+  "name": "role-gpt-ui",
   "version": "1.0.0",
   "scripts": {
     "dev": "vite",
