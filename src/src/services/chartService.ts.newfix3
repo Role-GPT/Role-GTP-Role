@@ -1,0 +1,365 @@
+/**
+ * 차트 및 그래프 생성 서비스
+ * 
+ * QuickChart API와 네이버 데이터랩을 활용한 데이터 시각화 기능
+ * - 다양한 차트 타입 지원 (라인, 막대, 파이, 도넛, 영역 차트)
+ * - 네이버 데이터랩 데이터 자동 차트 변환
+ * - 사전 정의된 차트 템플릿 제공
+ * 
+ * @author Role GPT Team
+ * @version 1.0.0
+ */
+
+import { projectId, publicAnonKey } from '../../utils/supabase/info';
+
+// 차트 관련 타입 정의
+export interface ChartDataset {
+  label: string;
+  data: number[];
+  backgroundColor?: string | string[];
+  borderColor?: string | string[];
+  borderWidth?: number;
+  fill?: boolean;
+}
+
+export interface ChartConfig {
+  type: "line" | "bar" | "pie" | "doughnut" | "radar" | "area";
+  data: {
+    labels: string[];
+    datasets: ChartDataset[];
+  };
+  options?: {
+    responsive?: boolean;
+    plugins?: {
+      title?: {
+        display: boolean;
+        text: string;
+      };
+      legend?: {
+        display: boolean;
+        position?: "top" | "bottom" | "left" | "right";
+      };
+    };
+    scales?: {
+      y?: {
+        beginAtZero?: boolean;
+        title?: {
+          display: boolean;
+          text: string;
+        };
+      };
+      x?: {
+        title?: {
+          display: boolean;
+          text: string;
+        };
+      };
+    };
+  };
+}
+
+export interface ChartGenerationOptions {
+  width?: number;
+  height?: number;
+  backgroundColor?: string;
+  format?: "png" | "svg" | "webp";
+}
+
+export interface ChartTemplate {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  example: ChartConfig;
+}
+
+export interface DataLabChartOptions {
+  keywords: string[];
+  startDate?: string;
+  endDate?: string;
+  timeUnit?: "date" | "week" | "month";
+  chartType?: "line" | "bar" | "area";
+  width?: number;
+  height?: number;
+}
+
+export interface ChartResponse {
+  success: boolean;
+  chartUrl: string;
+  config: ChartConfig;
+  rawData?: any;
+  summary?: {
+    keywords: string[];
+    period: string;
+    timeUnit: string;
+    dataPoints: number;
+  };
+}
+
+/**
+ * 차트 서비스 클래스
+ */
+class ChartService {
+  private baseUrl: string;
+
+  constructor() {
+    this.baseUrl = `https://${projectId}.supabase.co/functions/v1/make-server-e3d1d00c`;
+  }
+
+  /**
+   * 기본 헤더 생성
+   */
+  private getHeaders(): HeadersInit {
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${publicAnonKey}`
+    };
+  }
+
+  /**
+   * 일반 차트 생성
+   * 
+   * @param config - Chart.js 설정
+   * @param options - 차트 생성 옵션 (크기, 배경색 등)
+   * @returns 생성된 차트 URL과 설정
+   */
+  async generateChart(config: ChartConfig, options: ChartGenerationOptions = {}): Promise<ChartResponse> {
+    try {
+      console.log('📊 차트 생성 요청:', { type: config.type, options });
+
+      const response = await fetch(`${this.baseUrl}/chart/generate`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({
+          chart: config,
+          ...options
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `차트 생성 실패: ${response.status}`);
+      }
+
+      const data: ChartResponse = await response.json();
+      console.log('✅ 차트 생성 완료:', data.chartUrl);
+
+      return data;
+    } catch (error) {
+      console.error('차트 생성 중 오류:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 네이버 데이터랩 데이터를 활용한 차트 생성
+   * 
+   * @param options - 데이터랩 차트 생성 옵션
+   * @returns 생성된 트렌드 차트 URL과 데이터
+   */
+  async generateDataLabChart(options: DataLabChartOptions): Promise<ChartResponse> {
+    try {
+      console.log('📊 데이터랩 차트 생성 요청:', options);
+
+      const response = await fetch(`${this.baseUrl}/chart/datalab`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(options)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `데이터랩 차트 생성 실패: ${response.status}`);
+      }
+
+      const data: ChartResponse = await response.json();
+      console.log('✅ 데이터랩 차트 생성 완료:', data.summary);
+
+      return data;
+    } catch (error) {
+      console.error('데이터랩 차트 생성 중 오류:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 차트 템플릿 목록 조회
+   * 
+   * @returns 사용 가능한 차트 템플릿 목록
+   */
+  async getChartTemplates(): Promise<ChartTemplate[]> {
+    try {
+      console.log('📋 차트 템플릿 조회');
+
+      const response = await fetch(`${this.baseUrl}/chart/templates`, {
+        method: 'GET',
+        headers: this.getHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error(`템플릿 조회 실패: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ 차트 템플릿 조회 완료:', data.templates.length, '개');
+
+      return data.templates;
+    } catch (error) {
+      console.error('차트 템플릿 조회 중 오류:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 검색어 트렌드 비교 차트 생성 (간단한 헬퍼 메서드)
+   * 
+   * @param keywords - 비교할 검색어들
+   * @param months - 조회할 개월 수 (기본 12개월)
+   * @returns 생성된 트렌드 비교 차트
+   */
+  async generateTrendComparison(keywords: string[], months: number = 12): Promise<ChartResponse> {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setMonth(endDate.getMonth() - months);
+
+    return this.generateDataLabChart({
+      keywords,
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+      timeUnit: "month",
+      chartType: "line",
+      width: 800,
+      height: 400
+    });
+  }
+
+  /**
+   * 단순 데이터를 막대 차트로 변환
+   * 
+   * @param title - 차트 제목
+   * @param labels - 데이터 레이블들
+   * @param values - 데이터 값들
+   * @param options - 추가 옵션
+   * @returns 생성된 막대 차트
+   */
+  async generateSimpleBarChart(
+    title: string,
+    labels: string[],
+    values: number[],
+    options: ChartGenerationOptions = {}
+  ): Promise<ChartResponse> {
+    const colors = [
+      "rgba(59, 130, 246, 0.8)",   // 파랑
+      "rgba(239, 68, 68, 0.8)",    // 빨강
+      "rgba(34, 197, 94, 0.8)",    // 초록
+      "rgba(251, 146, 60, 0.8)",   // 주황
+      "rgba(168, 85, 247, 0.8)",   // 보라
+    ];
+
+    const config: ChartConfig = {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{
+          label: "값",
+          data: values,
+          backgroundColor: colors.slice(0, values.length)
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: true,
+            text: title
+          },
+          legend: {
+            display: false
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true
+          }
+        }
+      }
+    };
+
+    return this.generateChart(config, options);
+  }
+
+  /**
+   * 단순 데이터를 파이 차트로 변환
+   * 
+   * @param title - 차트 제목
+   * @param labels - 데이터 레이블들
+   * @param values - 데이터 값들
+   * @param options - 추가 옵션
+   * @returns 생성된 파이 차트
+   */
+  async generateSimplePieChart(
+    title: string,
+    labels: string[],
+    values: number[],
+    options: ChartGenerationOptions = {}
+  ): Promise<ChartResponse> {
+    const colors = [
+      "rgba(59, 130, 246, 0.8)",
+      "rgba(239, 68, 68, 0.8)",
+      "rgba(34, 197, 94, 0.8)",
+      "rgba(251, 146, 60, 0.8)",
+      "rgba(168, 85, 247, 0.8)",
+      "rgba(236, 72, 153, 0.8)",
+      "rgba(14, 165, 233, 0.8)",
+      "rgba(99, 102, 241, 0.8)"
+    ];
+
+    const config: ChartConfig = {
+      type: "pie",
+      data: {
+        labels,
+        datasets: [{
+          label: "분포",
+          data: values,
+          backgroundColor: colors.slice(0, values.length)
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: true,
+            text: title
+          },
+          legend: {
+            display: true,
+            position: "right"
+          }
+        }
+      }
+    };
+
+    return this.generateChart(config, options);
+  }
+}
+
+// 싱글톤 인스턴스 export
+export const chartService = new ChartService();
+
+// 편의 함수들
+export const generateChart = (config: ChartConfig, options?: ChartGenerationOptions) => 
+  chartService.generateChart(config, options);
+
+export const generateDataLabChart = (options: DataLabChartOptions) => 
+  chartService.generateDataLabChart(options);
+
+export const generateTrendComparison = (keywords: string[], months?: number) => 
+  chartService.generateTrendComparison(keywords, months);
+
+export const generateSimpleBarChart = (title: string, labels: string[], values: number[], options?: ChartGenerationOptions) => 
+  chartService.generateSimpleBarChart(title, labels, values, options);
+
+export const generateSimplePieChart = (title: string, labels: string[], values: number[], options?: ChartGenerationOptions) => 
+  chartService.generateSimplePieChart(title, labels, values, options);
+
+export const getChartTemplates = () => chartService.getChartTemplates();
