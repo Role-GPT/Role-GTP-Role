@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a1a1a" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    
+    <!-- SEO -->
+    <title>Role GPT - AI Assistant with Specialized Roles</title>
+    <meta name="description" content="ChatGPT-style AI assistant with 24 specialized roles. Experience personalized conversations with experts in various fields.">
+    <meta name="keywords" content="AI, chatbot, assistant, ChatGPT, role-playing, specialized, expert">
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="Role GPT - AI Assistant with Specialized Roles">
+    <meta property="og:description" content="Experience conversations with AI experts in 24+ specialized roles">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Role GPT">
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Role GPT - AI Assistant">
+    <meta name="twitter:description" content="AI assistant with specialized roles">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    
+    <!-- Apple Touch Icon -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Role GPT">
+    
+    <!-- Preload -->
+    <link rel="preload" href="/fonts/Inter-Variable.woff2" as="font" type="font/woff2" crossorigin>
+    
+    <style>
+      /* Critical CSS - Prevent FOUC */
+      html {
+        background-color: #1a1a1a;
+        color: #ffffff;
+      }
+      html.light {
+        background-color: #ffffff;
+        color: #000000;
+      }
+      
+      /* Loading Spinner */
+      .loading-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: #fff;
+        animation: spin 1s ease-in-out infinite;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      
+      /* Viewport Fix for Mobile */
+      body {
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+        min-height: 100dvh;
+        overscroll-behavior: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <!-- Loading State -->
+      <div style="
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      ">
+        <div class="loading-spinner"></div>
+        <p style="margin: 0; opacity: 0.8; font-size: 14px;">Role GPT 로딩 중...</p>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

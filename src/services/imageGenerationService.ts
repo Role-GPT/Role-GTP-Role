@@ -1,0 +1,530 @@
+/**
+ * 이미지 생성 서비스
+ * 
+ * 무료 체험(Craiyon)과 BYOK(사용자 API 키) 기반 이미지 생성을 지원
+ * - Craiyon: 키리스 무료 체험 (스케치 품질)
+ * - OpenAI DALL-E: 고품질 이미지 생성
+ * - Google Gemini: 구글 이미지 생성 API
+ * - Hugging Face: Stable Diffusion 등
+ */
+
+export interface ImageGenerationProvider {
+  id: string;
+  name: string;
+  description: string;
+  type: 'free' | 'byok';
+  isAvailable: boolean;
+  quality: 'sketch' | 'standard' | 'high';
+  hasApiKey?: boolean;
+  models?: Array<{
+    id: string;
+    name: string;
+    description: string;
+    defaultSize?: string;
+  }>;
+}
+
+export interface ImageGenerationRequest {
+  prompt: string;
+  size?: '256x256' | '512x512' | '1024x1024' | '1792x1024' | '1024x1792';
+  style?: 'natural' | 'vivid' | 'sketch' | 'artistic';
+  provider?: string;
+}
+
+export interface ImageGenerationResult {
+  imageUrl: string;
+  provider: string;
+  prompt: string;
+  size: string;
+  timestamp: Date;
+  isBase64?: boolean;
+}
+
+// 일일 무료 한도 관리
+const FREE_DAILY_LIMIT = 10;
+const STORAGE_KEY = 'image_generation_usage';
+
+interface DailyUsage {
+  date: string;
+  count: number;
+}
+
+/**
+ * 일일 사용량 확인
+ */
+export function getDailyUsage(): number {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return 0;
+    
+    const usage: DailyUsage = JSON.parse(stored);
+    const today = new Date().toISOString().split('T')[0];
+    
+    if (usage.date !== today) {
+      // 새로운 날짜면 리셋
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ date: today, count: 0 }));
+      return 0;
+    }
+    
+    return usage.count;
+  } catch (error) {
+    console.error('일일 사용량 확인 실패:', error);
+    return 0;
+  }
+}
+
+/**
+ * 일일 사용량 증가
+ */
+export function incrementDailyUsage(): void {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const currentUsage = getDailyUsage();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ 
+      date: today, 
+      count: currentUsage + 1 
+    }));
+  } catch (error) {
+    console.error('일일 사용량 업데이트 실패:', error);
+  }
+}
+
+/**
+ * 무료 한도 확인
+ */
+export function canUseFreeGeneration(): boolean {
+  return getDailyUsage() < FREE_DAILY_LIMIT;
+}
+
+/**
+ * Craiyon 무료 이미지 생성 (서버리스 함수 사용)
+ */
+export async function generateImageWithCraiyon(prompt: string): Promise<ImageGenerationResult> {
+  if (!canUseFreeGeneration()) {
+    throw new Error('실패했습니다. 더 나은 이미지 품질과 무제한 생성을 위해 개인 API 키를 연결해주세요.');
+  }
+
+  try {
+    console.log('🎨 Craiyon 이미지 생성 시작:', prompt.substring(0, 50));
+    
+    const { projectId, publicAnonKey } = await import('../../utils/supabase/info');
+    
+    const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-e3d1d00c/image/craiyon`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${publicAnonKey}`,
+      },
+      body: JSON.stringify({
+        prompt: prompt
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `서버 오류: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (!data.success) {
+      throw new Error(data.error || '이미지 생성에 실패했습니다.');
+    }
+
+    incrementDailyUsage();
+
+    return {
+      imageUrl: data.imageUrl,
+      provider: data.provider,
+      prompt: data.prompt,
+      size: data.size,
+      timestamp: new Date(data.timestamp),
+      isBase64: data.isBase64
+    };
+  } catch (error) {
+    console.error('Craiyon 이미지 생성 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * OpenAI DALL-E 이미지 생성 (서버리스 함수 사용)
+ */
+export async function generateImageWithDALLE(
+  prompt: string, 
+  apiKey: string, 
+  options: Partial<ImageGenerationRequest> = {}
+): Promise<ImageGenerationResult> {
+  try {
+    console.log('🎨 DALL-E 이미지 생성 시작:', prompt.substring(0, 50));
+    
+    const { projectId, publicAnonKey } = await import('../../utils/supabase/info');
+    
+    const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-e3d1d00c/image/dalle`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${publicAnonKey}`,
+      },
+      body: JSON.stringify({
+        prompt: prompt,
+        apiKey: apiKey,
+        size: options.size || '1024x1024',
+        style: options.style || 'natural'
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `서버 오류: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (!data.success) {
+      throw new Error(data.error || 'DALL-E 이미지 생성에 실패했습니다.');
+    }
+
+    return {
+      imageUrl: data.imageUrl,
+      provider: data.provider,
+      prompt: data.prompt,
+      size: data.size,
+      timestamp: new Date(data.timestamp)
+    };
+  } catch (error) {
+    console.error('DALL-E 이미지 생성 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * Google 이미지 생성 (서버리스 함수 사용)
+ */
+export async function generateImageWithGoogle(
+  prompt: string, 
+  apiKey: string,
+  options: Partial<ImageGenerationRequest> & { model?: string } = {}
+): Promise<ImageGenerationResult> {
+  try {
+    console.log('🎨 Google 이미지 생성 시작:', prompt.substring(0, 50));
+    
+    const { projectId, publicAnonKey } = await import('../../utils/supabase/info');
+    
+    const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-e3d1d00c/image/google`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${publicAnonKey}`,
+      },
+      body: JSON.stringify({
+        prompt: prompt,
+        apiKey: apiKey,
+        model: options.model || 'imagen-3.0-fast-generate-001',
+        size: options.size || '1024x1024'
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `서버 오류: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Google 이미지 생성에 실패했습니다.');
+    }
+
+    return {
+      imageUrl: data.imageUrl,
+      provider: data.provider,
+      prompt: data.prompt,
+      size: data.size,
+      timestamp: new Date(data.timestamp),
+      isBase64: data.isBase64
+    };
+  } catch (error) {
+    console.error('Google 이미지 생성 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * Hugging Face Stable Diffusion 이미지 생성 (서버리스 함수 사용)
+ */
+export async function generateImageWithHuggingFace(
+  prompt: string, 
+  apiKey: string,
+  options: Partial<ImageGenerationRequest> = {}
+): Promise<ImageGenerationResult> {
+  try {
+    console.log('🎨 Hugging Face 이미지 생성 시작:', prompt.substring(0, 50));
+    
+    const { projectId, publicAnonKey } = await import('../../utils/supabase/info');
+    
+    const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-e3d1d00c/image/huggingface`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${publicAnonKey}`,
+      },
+      body: JSON.stringify({
+        prompt: prompt,
+        apiKey: apiKey
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `서버 오류: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Hugging Face 이미지 생성에 실패했습니다.');
+    }
+
+    return {
+      imageUrl: data.imageUrl,
+      provider: data.provider,
+      prompt: data.prompt,
+      size: data.size,
+      timestamp: new Date(data.timestamp),
+      isBase64: data.isBase64
+    };
+  } catch (error) {
+    console.error('Hugging Face 이미지 생성 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 메인 이미지 생성 함수
+ */
+export async function generateImage(
+  request: ImageGenerationRequest,
+  userSettings: any
+): Promise<ImageGenerationResult> {
+  const { prompt, provider } = request;
+  
+  // Provider 우선순위 결정
+  let selectedProvider = provider;
+  
+  if (!selectedProvider) {
+    // 사용자가 설정한 우선순위에 따라 선택
+    const imageSettings = userSettings.imageGeneration || {};
+    const availableProviders = getAvailableProviders(userSettings);
+    
+    selectedProvider = availableProviders.find(p => p.isAvailable)?.id || 'craiyon';
+  }
+
+  console.log('🎯 이미지 생성 요청:', {
+    provider: selectedProvider,
+    prompt: prompt.substring(0, 50) + '...',
+    size: request.size
+  });
+
+  switch (selectedProvider) {
+    case 'craiyon':
+      return await generateImageWithCraiyon(prompt);
+    
+    case 'dalle':
+      const dalleKey = userSettings.apiKeys?.openai;
+      if (!dalleKey) {
+        throw new Error('OpenAI API 키가 설정되지 않았습니다.');
+      }
+      return await generateImageWithDALLE(prompt, dalleKey, request);
+    
+    case 'google':
+    case 'gemini':
+    case 'imagen-2':
+    case 'imagen-3':
+    case 'imagen-4':
+    case 'gemini-2.5-flash-image':
+      const googleKey = userSettings.apiKeys?.google_gemini;
+      if (!googleKey) {
+        throw new Error('Google API 키가 설정되지 않았습니다.');
+      }
+      
+      // 모델 매핑
+      let modelName = 'imagen-3.0-fast-generate-001'; // 기본값
+      if (selectedProvider === 'imagen-2') modelName = 'imagen-2.0-generate-001';
+      if (selectedProvider === 'imagen-3') modelName = 'imagen-3.0-generate-001';
+      if (selectedProvider === 'imagen-4') modelName = 'imagen-4.0-generate-001';
+      if (selectedProvider === 'gemini-2.5-flash-image') modelName = 'gemini-2.5-flash-image-001';
+      
+      return await generateImageWithGoogle(prompt, googleKey, { ...request, model: modelName });
+    
+    case 'huggingface':
+      const hfKey = userSettings.apiKeys?.huggingface;
+      if (!hfKey) {
+        throw new Error('Hugging Face API 키가 설정되지 않았습니다.');
+      }
+      return await generateImageWithHuggingFace(prompt, hfKey, request);
+    
+    default:
+      // 기본값으로 무료 Craiyon 사용
+      return await generateImageWithCraiyon(prompt);
+  }
+}
+
+/**
+ * 사용 가능한 Provider 목록 조회
+ */
+export function getAvailableProviders(userSettings: any): ImageGenerationProvider[] {
+  const apiKeys = userSettings.apiKeys || {};
+  const hasGoogleKey = !!apiKeys.google_gemini;
+  
+  const providers: ImageGenerationProvider[] = [
+    {
+      id: 'craiyon',
+      name: 'Craiyon',
+      description: '무료 체험',
+      type: 'free',
+      isAvailable: canUseFreeGeneration(),
+      quality: 'sketch'
+    },
+    {
+      id: 'dalle',
+      name: 'DALL-E 3',
+      description: 'OpenAI 고품질',
+      type: 'byok',
+      isAvailable: !!apiKeys.openai,
+      quality: 'high',
+      hasApiKey: !!apiKeys.openai
+    }
+  ];
+
+  // Google 모델들 (동일한 키로 다중 모델 지원)
+  if (hasGoogleKey) {
+    providers.push(
+      {
+        id: 'imagen-3',
+        name: 'Imagen 3.0',
+        description: 'Google 최신',
+        type: 'byok',
+        isAvailable: true,
+        quality: 'high',
+        hasApiKey: true
+      },
+      {
+        id: 'imagen-2',
+        name: 'Imagen 2.0',
+        description: 'Google 표준',
+        type: 'byok',
+        isAvailable: true,
+        quality: 'high',
+        hasApiKey: true
+      },
+      {
+        id: 'gemini-2.5-flash-image',
+        name: 'Gemini Flash Image',
+        description: 'Google 빠른생성',
+        type: 'byok',
+        isAvailable: true,
+        quality: 'standard',
+        hasApiKey: true
+      }
+    );
+  } else {
+    // API 키가 없을 때도 표시하되 비활성화
+    providers.push(
+      {
+        id: 'google-group',
+        name: 'Google 모델들',
+        description: 'API 키 필요',
+        type: 'byok',
+        isAvailable: false,
+        quality: 'high',
+        hasApiKey: false,
+        models: [
+          { id: 'imagen-3', name: 'Imagen 3.0', description: '최신 모델' },
+          { id: 'imagen-2', name: 'Imagen 2.0', description: '표준 모델' },
+          { id: 'gemini-2.5-flash-image', name: 'Gemini Flash Image', description: '빠른 생성' }
+        ]
+      }
+    );
+  }
+
+  providers.push(
+    {
+      id: 'huggingface',
+      name: 'Stable Diffusion',
+      description: 'HuggingFace 오픈소스',
+      type: 'byok',
+      isAvailable: !!apiKeys.huggingface,
+      quality: 'standard',
+      hasApiKey: !!apiKeys.huggingface
+    }
+  );
+
+  // 사용자 정의 Provider들 추가
+  const customProviders = getCustomImageProviders(userSettings);
+  providers.push(...customProviders);
+
+  return providers;
+}
+
+/**
+ * 사용자 정의 이미지 Provider 조회
+ */
+export function getCustomImageProviders(userSettings: any): ImageGenerationProvider[] {
+  const customProviders = userSettings.customImageProviders || [];
+  
+  return customProviders.map((provider: any) => ({
+    id: provider.id,
+    name: provider.name,
+    description: provider.description || '사용자 정의',
+    type: 'byok' as const,
+    isAvailable: !!provider.apiKey,
+    quality: provider.quality || 'standard' as const,
+    hasApiKey: !!provider.apiKey
+  }));
+}
+
+/**
+ * 이미지 생성 히스토리 관리
+ */
+const HISTORY_STORAGE_KEY = 'image_generation_history';
+const MAX_HISTORY_ITEMS = 50;
+
+export interface ImageHistoryItem extends ImageGenerationResult {
+  id: string;
+}
+
+export function getImageHistory(): ImageHistoryItem[] {
+  try {
+    const stored = localStorage.getItem(HISTORY_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    console.error('이미지 히스토리 로드 실패:', error);
+    return [];
+  }
+}
+
+export function addToImageHistory(result: ImageGenerationResult): void {
+  try {
+    const history = getImageHistory();
+    const newItem: ImageHistoryItem = {
+      ...result,
+      id: `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    };
+    
+    history.unshift(newItem);
+    
+    // 최대 개수 제한
+    if (history.length > MAX_HISTORY_ITEMS) {
+      history.splice(MAX_HISTORY_ITEMS);
+    }
+    
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+  } catch (error) {
+    console.error('이미지 히스토리 저장 실패:', error);
+  }
+}
+
+export function clearImageHistory(): void {
+  localStorage.removeItem(HISTORY_STORAGE_KEY);
+}

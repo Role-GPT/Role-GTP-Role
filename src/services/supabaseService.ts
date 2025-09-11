@@ -1,0 +1,188 @@
+/**
+ * Supabase 엣지 함수 호출 서비스
+ */
+
+import { getDeviceFingerprintRaw, getDeviceId, sha256 } from '../utils/deviceFingerprint';
+import { projectId, publicAnonKey } from '../../utils/supabase/info';
+
+const BASE_URL = `https://${projectId}.supabase.co/functions/v1`;
+
+const headers = {
+  'Authorization': `Bearer ${publicAnonKey}`,
+  'Content-Type': 'application/json',
+};
+
+export interface GuestTrialResult {
+  status: 'exists' | 'issued';
+  expires_at: string;
+  days_remaining: number;
+  message: string;
+}
+
+export interface SeatAssignmentResult {
+  seat_no: number;
+  seat_token: string;
+  session_expires_at: string;
+  seats_used: number;
+  seats_total: number;
+}
+
+export interface HeartbeatResult {
+  seat_no: number;
+  session_expires_at: string;
+  last_seen_at: string;
+  status: string;
+}
+
+export interface DeviceLinkResult {
+  pin: string;
+  expires_at: string;
+  expires_in_minutes: number;
+  message: string;
+}
+
+export interface DeviceClaimResult {
+  device_id: string;
+  message: string;
+}
+
+/**
+ * 개인 모드 3일 체험 발급
+ */
+export async function issueGuestTrial(): Promise<GuestTrialResult> {
+  const response = await fetch(`${BASE_URL}/issue_guest`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      device_fp_raw: getDeviceFingerprintRaw()
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error);
+  }
+
+  return await response.json();
+}
+
+/**
+ * 공용 모드 좌석 할당
+ */
+export async function assignSeat(code: string): Promise<SeatAssignmentResult> {
+  const response = await fetch(`${BASE_URL}/assign_seat`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      code,
+      device_fp_raw: getDeviceFingerprintRaw()
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error);
+  }
+
+  return await response.json();
+}
+
+/**
+ * 공용 모드 좌석 하트비트
+ */
+export async function sendHeartbeat(code: string, seatToken: string): Promise<HeartbeatResult> {
+  const response = await fetch(`${BASE_URL}/heartbeat`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      code,
+      seat_token: seatToken
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error);
+  }
+
+  return await response.json();
+}
+
+/**
+ * 공용 모드 좌석 반납
+ */
+export async function releaseSeat(code: string, seatToken: string): Promise<void> {
+  const response = await fetch(`${BASE_URL}/release_seat`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      code,
+      seat_token: seatToken
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error);
+  }
+}
+
+/**
+ * 이메일 계정에 디바이스 연결
+ */
+export async function linkUserDevice(email: string, trialId?: string): Promise<void> {
+  const response = await fetch(`${BASE_URL}/link_user_device`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      email,
+      device_fp_raw: getDeviceFingerprintRaw(),
+      trial_id: trialId
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error);
+  }
+}
+
+/**
+ * 다중 브라우저 연결용 PIN 생성
+ */
+export async function createDeviceLink(): Promise<DeviceLinkResult> {
+  const response = await fetch(`${BASE_URL}/create_device_link`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      device_id: getDeviceId()
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error);
+  }
+
+  return await response.json();
+}
+
+/**
+ * PIN으로 다중 브라우저 연결
+ */
+export async function claimDeviceLink(pin: string): Promise<DeviceClaimResult> {
+  const response = await fetch(`${BASE_URL}/claim_device_link`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      pin
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error);
+  }
+
+  return await response.json();
+}
