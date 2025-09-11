@@ -1,7 +1,0 @@
-{
-  "name": "Role GPT",
-  "description": "Access Gemini models with the OpenAI SDK",
-  "requestFramePermissions": [
-    "microphone"
-  ]
-}
